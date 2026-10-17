@@ -1,0 +1,331 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>星キャッチ</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Maru+Gothic:wght@500;700&display=swap">
+<style>
+/* Layout: full-height night-sky game. Slim score bar on top, canvas fills the rest, a centered panel for start / game over. */
+:root {
+  --sky: #0b1030;
+  --sky-2: #1c2260;
+  --lantern: #ffd36b;
+  --ember: #ff6a4d;
+  --ink: #f3efe2;
+  --mute: #9aa3d6;
+  --panel: rgba(11, 16, 48, 0.82);
+  --f-display: "Dela Gothic One", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --f-body: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic", sans-serif;
+  color-scheme: dark;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--sky);
+  background-image: linear-gradient(180deg, var(--sky) 0%, var(--sky-2) 100%);
+  color: var(--ink);
+  font-family: var(--f-body);
+  font-weight: 500;
+  overflow: hidden;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0;
+  -webkit-user-select: none;
+  user-select: none;
+}
+#app { height: 100%; display: flex; flex-direction: column; gap: 8px; }
+header {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 12px;
+  padding-top: 10px;
+}
+.stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.stat small { font-size: 11px; letter-spacing: 0.12em; color: var(--mute); }
+.stat b { font-family: var(--f-display); font-weight: 400; font-size: 28px; line-height: 1; font-variant-numeric: tabular-nums; color: var(--lantern); }
+.stat.best b { font-size: 18px; color: var(--ink); }
+.lives { display: flex; gap: 6px; align-items: center; height: 28px; }
+.lives i { width: 14px; height: 14px; border-radius: 50%; background: var(--ember); box-shadow: 0 0 10px var(--ember); transition: opacity .25s, transform .25s; }
+.lives i.off { opacity: .18; transform: scale(.7); box-shadow: none; }
+main { position: relative; flex: 1; min-height: 0; margin-bottom: 8px; }
+canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+#panel {
+  position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%);
+  width: min(100%, 320px); box-sizing: border-box;
+  background: var(--panel); border: 1px solid rgba(255, 211, 107, 0.35);
+  border-radius: 20px; padding: 22px 20px; text-align: center;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  display: flex; flex-direction: column; gap: 12px;
+}
+#panel h1 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 34px; letter-spacing: 0.04em; color: var(--lantern); text-wrap: balance; }
+#panel p { margin: 0; font-size: 14px; line-height: 1.7; color: var(--ink); }
+#panel .rules { display: grid; gap: 6px; text-align: left; font-size: 13px; color: var(--mute); margin: 0; padding: 0; list-style: none; }
+#panel .rules li { display: flex; align-items: center; gap: 10px; }
+#panel .rules svg { flex: none; }
+#score-out { font-family: var(--f-display); font-size: 44px; color: var(--lantern); font-variant-numeric: tabular-nums; line-height: 1.1; }
+button#go {
+  appearance: none; border: 0; cursor: pointer; font: inherit; font-weight: 700; font-size: 17px;
+  background: var(--lantern); color: var(--sky); padding: 14px 20px; border-radius: 999px;
+}
+button#go:active { transform: scale(.97); }
+button#go:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .lives i { transition: none; } }
+</style>
+
+<div id="app">
+  <header>
+    <div class="stat"><small>スコア</small><b id="score">0</b></div>
+    <div class="stat best"><small>ベスト</small><b id="best">0</b></div>
+    <div class="lives" id="lives" aria-label="残りライフ"><i></i><i></i><i></i></div>
+  </header>
+  <main>
+    <canvas id="cv"></canvas>
+    <section id="panel">
+      <h1 id="p-title">星キャッチ</h1>
+      <div id="p-body">
+        <p>指で左右になぞって、バスケットで流れ星を受け止めよう。</p>
+      </div>
+      <ul class="rules" id="rules">
+        <li><svg width="18" height="18" viewBox="-10 -10 20 20"><polygon fill="#ffd36b" points="0,-9 2.6,-3 9,-2.8 4,1.5 5.6,8 0,4.5 -5.6,8 -4,1.5 -9,-2.8 -2.6,-3"/></svg>星は1点</li>
+        <li><svg width="18" height="18" viewBox="-10 -10 20 20"><polygon fill="#fff4c4" stroke="#ffb020" stroke-width="1.5" points="0,-9 2.6,-3 9,-2.8 4,1.5 5.6,8 0,4.5 -5.6,8 -4,1.5 -9,-2.8 -2.6,-3"/></svg>白い大きな星は5点</li>
+        <li><svg width="18" height="18" viewBox="-10 -10 20 20"><circle r="7" fill="#ff6a4d"/></svg>赤い隕石に3回当たるとおしまい</li>
+      </ul>
+      <button id="go" type="button">はじめる</button>
+    </section>
+  </main>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById("cv");
+  var ctx = cv.getContext("2d");
+  var elScore = document.getElementById("score");
+  var elBest = document.getElementById("best");
+  var elLives = document.getElementById("lives").children;
+  var panel = document.getElementById("panel");
+  var pTitle = document.getElementById("p-title");
+  var pBody = document.getElementById("p-body");
+  var rules = document.getElementById("rules");
+  var goBtn = document.getElementById("go");
+
+  var W = 0, H = 0, dpr = 1, u = 1;
+  var state = "idle"; // idle | play | over
+  var score = 0, lives = 3, best = 0;
+  var items = [], parts = [], bgStars = [];
+  var spawnT = 0, flash = 0, last = 0;
+  var cat = { x: 0, tx: 0 };
+  var keys = { l: false, r: false };
+
+  try { best = parseInt(localStorage.getItem("hoshi-best") || "0", 10) || 0; } catch (e) {}
+  elBest.textContent = best;
+
+  function resize() {
+    var r = cv.getBoundingClientRect();
+    dpr = Math.min(window.devicePixelRatio || 1, 3);
+    W = r.width; H = r.height;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    u = Math.max(0.8, Math.min(W / 400, 1.4));
+    if (!cat.x) { cat.x = cat.tx = W / 2; }
+    cat.tx = Math.min(Math.max(cat.tx, 0), W);
+    bgStars = [];
+    for (var i = 0; i < 60; i++) {
+      bgStars.push({ x: Math.random() * W, y: Math.random() * H, r: Math.random() * 1.3 + 0.3, p: Math.random() * 6.28 });
+    }
+  }
+  if (window.ResizeObserver) { new ResizeObserver(resize).observe(cv); }
+  window.addEventListener("resize", resize);
+  resize();
+
+  function setLives() {
+    for (var i = 0; i < elLives.length; i++) { elLives[i].className = i < lives ? "" : "off"; }
+  }
+
+  function spawn() {
+    var r = Math.random(), type = "star";
+    if (state === "play") {
+      if (r < 0.22) type = "meteor"; else if (r > 0.94) type = "gold";
+    }
+    var size = (type === "gold" ? 15 : type === "meteor" ? 13 : 11) * u;
+    var base = (130 + Math.min(score * 3, 230) + Math.random() * 70) * Math.max(0.7, Math.min(H / 650, 1.5));
+    items.push({
+      type: type, size: size,
+      x: size + Math.random() * (W - size * 2), y: -size * 2,
+      vy: state === "play" ? base : base * 0.55,
+      rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 3
+    });
+  }
+
+  function burst(x, y, color, n) {
+    for (var i = 0; i < n; i++) {
+      var a = Math.random() * 6.28, s = 60 + Math.random() * 140;
+      parts.push({ x: x, y: y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 40, life: 0.5 + Math.random() * 0.3, t: 0, c: color });
+    }
+  }
+
+  function starPath(r) {
+    ctx.beginPath();
+    for (var i = 0; i < 10; i++) {
+      var rad = i % 2 === 0 ? r : r * 0.45;
+      var a = -Math.PI / 2 + i * Math.PI / 5;
+      var px = Math.cos(a) * rad, py = Math.sin(a) * rad;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+  }
+
+  function startGame() {
+    score = 0; lives = 3; items = []; parts = []; spawnT = 0.2;
+    elScore.textContent = "0"; setLives();
+    state = "play"; panel.hidden = true;
+  }
+
+  function endGame() {
+    state = "over";
+    var isBest = score > best;
+    if (isBest) {
+      best = score; elBest.textContent = best;
+      try { localStorage.setItem("hoshi-best", String(best)); } catch (e) {}
+    }
+    pTitle.textContent = "おしまい";
+    pBody.innerHTML = '<div id="score-out">' + score + '</div><p>' + (isBest ? "ベスト更新です。" : "ベストは " + best + " 点です。") + '</p>';
+    rules.hidden = true;
+    goBtn.textContent = "もう一度";
+    panel.hidden = false;
+  }
+
+  function update(dt) {
+    var cw = 84 * u, cy = H - 58 * u;
+    if (keys.l) cat.tx -= 520 * dt;
+    if (keys.r) cat.tx += 520 * dt;
+    cat.tx = Math.min(Math.max(cat.tx, cw / 2), W - cw / 2);
+    if (state === "idle") { cat.tx = W / 2 + Math.sin(performance.now() / 900) * W * 0.28; }
+    cat.x += (cat.tx - cat.x) * Math.min(1, dt * 18);
+
+    spawnT -= dt;
+    if (spawnT <= 0) {
+      spawn();
+      spawnT = state === "play" ? Math.max(0.28, 0.85 - score * 0.012) * (0.7 + Math.random() * 0.6) : 0.5;
+    }
+
+    for (var i = items.length - 1; i >= 0; i--) {
+      var it = items[i];
+      it.y += it.vy * dt; it.rot += it.vr * dt;
+      var caught = it.y > cy - 4 * u && it.y < cy + 22 * u && Math.abs(it.x - cat.x) < cw / 2 + it.size * 0.3;
+      if (caught && state === "play") {
+        if (it.type === "meteor") {
+          lives--; flash = 0.35; setLives();
+          burst(it.x, it.y, "#ff6a4d", 14);
+          if (lives <= 0) { items.splice(i, 1); endGame(); continue; }
+        } else {
+          score += it.type === "gold" ? 5 : 1;
+          elScore.textContent = score;
+          burst(it.x, it.y, it.type === "gold" ? "#fff4c4" : "#ffd36b", it.type === "gold" ? 16 : 9);
+        }
+        items.splice(i, 1); continue;
+      }
+      if (it.y > H + 40) { items.splice(i, 1); }
+    }
+    for (var j = parts.length - 1; j >= 0; j--) {
+      var p = parts[j];
+      p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 260 * dt;
+      if (p.t > p.life) parts.splice(j, 1);
+    }
+    if (flash > 0) flash -= dt;
+  }
+
+  function draw(now) {
+    ctx.clearRect(0, 0, W, H);
+    var i;
+    for (i = 0; i < bgStars.length; i++) {
+      var b = bgStars[i];
+      ctx.globalAlpha = 0.35 + 0.35 * Math.sin(now / 700 + b.p);
+      ctx.fillStyle = "#f3efe2";
+      ctx.fillRect(b.x, b.y, b.r, b.r);
+    }
+    ctx.globalAlpha = 1;
+
+    for (i = 0; i < items.length; i++) {
+      var it = items[i];
+      ctx.save();
+      ctx.translate(it.x, it.y);
+      if (it.type === "meteor") {
+        var g = ctx.createLinearGradient(0, -it.size * 3.4, 0, 0);
+        g.addColorStop(0, "rgba(255,106,77,0)"); g.addColorStop(1, "rgba(255,106,77,0.7)");
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.moveTo(-it.size * 0.7, 0); ctx.lineTo(0, -it.size * 3.4); ctx.lineTo(it.size * 0.7, 0); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "#ff6a4d";
+        ctx.beginPath(); ctx.arc(0, 0, it.size * 0.8, 0, 6.28); ctx.fill();
+        ctx.fillStyle = "#ffb199";
+        ctx.beginPath(); ctx.arc(-it.size * 0.25, -it.size * 0.25, it.size * 0.28, 0, 6.28); ctx.fill();
+      } else {
+        ctx.rotate(it.rot);
+        ctx.shadowColor = it.type === "gold" ? "#ffb020" : "#ffd36b";
+        ctx.shadowBlur = 14;
+        starPath(it.size);
+        if (it.type === "gold") {
+          ctx.fillStyle = "#fff4c4"; ctx.fill();
+          ctx.lineWidth = 2; ctx.strokeStyle = "#ffb020"; ctx.stroke();
+        } else {
+          ctx.fillStyle = "#ffd36b"; ctx.fill();
+        }
+      }
+      ctx.restore();
+    }
+
+    for (i = 0; i < parts.length; i++) {
+      var p = parts[i];
+      ctx.globalAlpha = Math.max(0, 1 - p.t / p.life);
+      ctx.fillStyle = p.c;
+      ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+    }
+    ctx.globalAlpha = 1;
+
+    // basket
+    var cw = 84 * u, cy = H - 58 * u;
+    ctx.save();
+    ctx.translate(cat.x, cy);
+    ctx.shadowColor = "rgba(255,211,107,0.55)"; ctx.shadowBlur = 18;
+    ctx.fillStyle = "#ffd36b";
+    ctx.beginPath();
+    ctx.moveTo(-cw / 2, 0); ctx.lineTo(cw / 2, 0);
+    ctx.quadraticCurveTo(cw * 0.42, 32 * u, 0, 32 * u);
+    ctx.quadraticCurveTo(-cw * 0.42, 32 * u, -cw / 2, 0);
+    ctx.closePath(); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "#0b1030"; ctx.lineWidth = 2; ctx.globalAlpha = 0.35;
+    for (var k = -1; k <= 1; k++) {
+      ctx.beginPath(); ctx.moveTo(k * cw * 0.2, 4 * u); ctx.lineTo(k * cw * 0.12, 28 * u); ctx.stroke();
+    }
+    ctx.restore();
+
+    if (flash > 0) {
+      ctx.fillStyle = "rgba(255,106,77," + (flash * 0.9) + ")";
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+
+  function loop(now) {
+    var dt = Math.min((now - last) / 1000, 0.05);
+    last = now;
+    update(dt);
+    draw(now);
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(function (t) { last = t; loop(t); });
+
+  function pointerX(e) {
+    var r = cv.getBoundingClientRect();
+    cat.tx = e.clientX - r.left;
+  }
+  cv.addEventListener("pointerdown", function (e) { if (state === "play") { pointerX(e); try { cv.setPointerCapture(e.pointerId); } catch (x) {} } });
+  cv.addEventListener("pointermove", function (e) { if (state === "play") pointerX(e); });
+  window.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowLeft") keys.l = true;
+    if (e.key === "ArrowRight") keys.r = true;
+  });
+  window.addEventListener("keyup", function (e) {
+    if (e.key === "ArrowLeft") keys.l = false;
+    if (e.key === "ArrowRight") keys.r = false;
+  });
+  goBtn.addEventListener("click", startGame);
+  setLives();
+})();
+</script>
