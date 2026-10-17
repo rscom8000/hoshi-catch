@@ -84,7 +84,7 @@ button#skip:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; 
 <body>
 <div id="app">
   <header>
-    <div class="stat"><small>スコア / 1000</small><b id="score">0</b></div>
+    <div class="stat"><small>スコア / 500</small><b id="score">0</b></div>
     <div class="stat spd"><small>スピード</small><b id="spd">×1.0</b></div>
     <div class="stat best"><small>ベスト</small><b id="best">0</b></div>
     <div class="lives" id="lives" aria-label="残りライフ"><i></i><i></i><i></i></div>
@@ -101,7 +101,7 @@ button#skip:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; 
         <li><svg width="18" height="18" viewBox="-10 -10 20 20"><polygon fill="#ffd36b" points="0,-9 2.6,-3 9,-2.8 4,1.5 5.6,8 0,4.5 -5.6,8 -4,1.5 -9,-2.8 -2.6,-3"/></svg>星は1点</li>
         <li><svg width="18" height="18" viewBox="-10 -10 20 20"><polygon fill="#fff4c4" stroke="#ffb020" stroke-width="1.5" points="0,-9 2.6,-3 9,-2.8 4,1.5 5.6,8 0,4.5 -5.6,8 -4,1.5 -9,-2.8 -2.6,-3"/></svg>白い大きな星は5点</li>
         <li><svg width="18" height="18" viewBox="-10 -10 20 20"><circle r="7" fill="#ff6a4d"/></svg>赤い隕石に3回当たるとおしまい</li>
-        <li><svg width="18" height="18" viewBox="-10 -10 20 20"><polygon fill="none" stroke="#ffd36b" stroke-width="1.5" points="0,-9 2.6,-3 9,-2.8 4,1.5 5.6,8 0,4.5 -5.6,8 -4,1.5 -9,-2.8 -2.6,-3"/></svg>1000点でクリア。点が増えるほど星が速くなります</li>
+        <li><svg width="18" height="18" viewBox="-10 -10 20 20"><polygon fill="none" stroke="#ffd36b" stroke-width="1.5" points="0,-9 2.6,-3 9,-2.8 4,1.5 5.6,8 0,4.5 -5.6,8 -4,1.5 -9,-2.8 -2.6,-3"/></svg>500点でクリア。点が増えるほど星が速くなります</li>
       </ul>
       <button id="go" type="button">はじめる</button>
     </section>
@@ -110,7 +110,7 @@ button#skip:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; 
 
 <script>
 (function () {
-  var GOAL = 1000;
+  var GOAL = 500;
   var CLEAR_MSG_1 = "あなたは", CLEAR_MSG_2 = "スターになりました♡";
 
   var cv = document.getElementById("cv");
@@ -211,13 +211,13 @@ button#skip:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; 
   }
 
   /* ---------- speed: faster as the score grows ---------- */
-  function speedBase(s) { return 130 + 230 * (1 - Math.exp(-s / 60)) + Math.min(s, GOAL) * 0.25; }
-  function setSpd() { elSpd.textContent = "×" + (speedBase(score) / 130).toFixed(1); }
+  function speedBase(s) { return 160 + 300 * (1 - Math.exp(-s / 50)) + Math.min(s, GOAL) * 0.7; }
+  function setSpd() { elSpd.textContent = "×" + (speedBase(score) / 160).toFixed(1); }
 
   function spawn() {
     var r = Math.random(), type = "star";
     if (state === "play") {
-      if (r < 0.22) type = "meteor"; else if (r > 0.94) type = "gold";
+      if (r < Math.min(0.5, 0.3 + score * 0.0004)) type = "meteor"; else if (r > 0.94) type = "gold";
     }
     var size = (type === "gold" ? 15 : type === "meteor" ? 13 : 11) * u;
     var base = (speedBase(state === "play" ? score : 0) + Math.random() * 70) * Math.max(0.7, Math.min(H / 650, 1.5));
@@ -378,7 +378,7 @@ button#skip:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; 
     spawnT -= dt;
     if (spawnT <= 0) {
       spawn();
-      spawnT = state === "play" ? Math.max(0.28, 0.85 - score * 0.012) * (0.7 + Math.random() * 0.6) : 0.5;
+      spawnT = state === "play" ? Math.max(0.22, 0.75 - score * 0.012) * (0.7 + Math.random() * 0.6) : 0.5;
     }
 
     for (var i = items.length - 1; i >= 0; i--) {
